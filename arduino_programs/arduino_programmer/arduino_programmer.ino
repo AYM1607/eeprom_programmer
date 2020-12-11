@@ -17,6 +17,7 @@
 // Digital pins 8 to 13 correspond to PB0 to PB5
 
 byte lastOp;
+static char printBuff[128];
 
 void latchOutput() {
   static byte latchMask = 0b00010000;
@@ -52,12 +53,12 @@ void setBusMode(bool busMode) {
 
 void setAddress(int address, bool outputEnable) {
   // Position of the output enable bit withing the data to be shifted out. 
-  static byte outputEnableMask = 0x8000;
+  static int outputEnableMask = 0x8000;
   // Position of the data bit within PORTD.
   static byte dataMask = 0b00000100;
   // Position of the clock bit within PORTD.
   static byte clockMask = 0b00001000;
-
+  
   if (outputEnable) {
     // Clear output enable bit.
     address &= ~outputEnableMask;
@@ -65,10 +66,9 @@ void setAddress(int address, bool outputEnable) {
     // Set output enable bit.
     address |= outputEnableMask;
   }
-  
-  // Make sure the clock pin is low.
-  PORTD &= ~clockMask;  
 
+  // Make sure the clock pin is low.
+  PORTD &= ~clockMask;
   // Shift the data out LSB first.
   for (uint8_t i = 0; i < 16; i++, address >>= 1) {
     if (address & 1) {
@@ -148,7 +148,8 @@ void setup() {
 
   Serial.begin(9600);
   
-
+  writeEEPROM(0x1234, 0x55, true);
+  writeEEPROM(0x4321, 0x7E, true);
 }
 
 void loop() {
