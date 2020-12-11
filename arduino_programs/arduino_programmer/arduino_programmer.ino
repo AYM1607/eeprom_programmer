@@ -1,3 +1,5 @@
+// This code is meant to be used on an Arduino Nano or Uno.
+
 #define SHIFT_DATA 2
 #define SHIFT_CLK 3
 #define SHIFT_LATCH 4
