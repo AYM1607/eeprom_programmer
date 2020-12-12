@@ -146,7 +146,7 @@ void setup() {
   // Setting an invalid value.
   lastOp = -1;
 
-  Serial.begin(9600);
+  Serial.begin(115200);
   
   writeEEPROM(0x1234, 0x55, true);
   writeEEPROM(0x4321, 0x7E, true);

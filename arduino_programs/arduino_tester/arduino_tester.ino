@@ -11,7 +11,7 @@
 #define WRITE_CLOCK 19
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   attachInterrupt(digitalPinToInterrupt(ADDRESS_CLOCK), onAddressClock, RISING);
   attachInterrupt(digitalPinToInterrupt(WRITE_CLOCK), onWriteClock, FALLING);
 }
