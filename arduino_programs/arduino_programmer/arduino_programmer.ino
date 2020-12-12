@@ -17,6 +17,10 @@
 // Digital pins 8 to 13 correspond to PB0 to PB5
 
 byte lastOp;
+int lastAddressWritten;
+byte lastDataWritten;
+bool isFirstWrite = true;
+
 static char printBuff[128];
 
 void latchOutput() {
@@ -88,14 +92,7 @@ void setAddress(int address, bool outputEnable) {
   latchOutput();
 }
 
-byte readEEPROM(int address) {
-  byte result = 0;
-  // TODO: Think about adding a delay if the last operation was a write and where it is appropriate to put it.
-  // If the last operation wasn't a read we need to set our pins as input.
-  if (lastOp != LAST_OP_READ) {
-    setBusMode(READ_MODE);
-  }
-
+byte readBus(int address) {
   // In contrast with the write function, it's okay to set output enable after setting the
   // pins as inputs. This way, the arduino pins are already ready to sink current when the
   // EEPROM starts driving the bus.
@@ -105,15 +102,21 @@ byte readEEPROM(int address) {
   // and a time from output enabled to output of 70ns max, thus it makes no sense to wait 2000ns, but
   // if it is not done, the most significant nibble is always 0xF.
   delayMicroseconds(2);
-  result = (PINB << 3) | (PIND >> 5);
+  return (PINB << 3) | (PIND >> 5);
+}
 
-  //for (int pin = EEPROM_D7; pin >= EEPROM_D0; pin--) {
-  //  result <<= 1;
-  //  result += digitalRead(pin);
-  //}
-
+byte readEEPROM(int address) {
+  // If the last operation wasn't a read we need to set our pins as input
+  if (lastOp != LAST_OP_READ) {
+    setBusMode(READ_MODE);
+    // If last op was a write we need to poll for valid data.
+    if (lastOp == LAST_OP_WRITE) {
+      while (readBus(lastAddressWritten) != lastDataWritten);
+    }
+  }
+  
   lastOp = LAST_OP_READ;
-  return result;
+  return readBus(address);
 }
 
 
@@ -122,7 +125,16 @@ byte readEEPROM(int address) {
  * If cooldown is true, the function adds a delay to avoid
  * reading incorrect data after a write.
  */
-void writeEEPROM(int address, byte data, bool cooldown) {
+void writeEEPROM(int address, byte data, bool pollOnPageChange) {
+  // Since we're performing page writes, we must poll the data when we change page.
+  if (
+    ((address & 0xFFC0) != (lastAddressWritten & 0xFFC0))
+    && isFirstWrite == false
+    && pollOnPageChange
+  ) {
+    while(readEEPROM(lastAddressWritten) != lastDataWritten);
+  }
+  
   // For the write case, must turn output enable off before setting the pins as outputs.
   // If we don't do this, for a brief period of time, both the arduino and the EEPROM would
   // drive the bus and this could case problems.
@@ -145,10 +157,10 @@ void writeEEPROM(int address, byte data, bool cooldown) {
   
   commitWrite();
   lastOp = LAST_OP_WRITE;
-  
-  if (cooldown) {
-    delay(10);
-  }
+  isFirstWrite = false;
+
+  lastAddressWritten = address;
+  lastDataWritten = data;
 }
 
 
@@ -167,12 +179,12 @@ void disableSoftwareProtection() {
 void dumpFirts256Bytes() {
   byte data;
   Serial.println("Reading EEPROM");
-  for (int addr = 0; addr < 256; addr++) {
-    data = readEEPROM(addr);
-    sprintf(printBuff, "Address: %x data: 0b", addr);
+  for (int addr = 0; addr < 256; addr += 16) {
+    sprintf(printBuff, "%04x:", addr);
     Serial.print(printBuff);
-    for (int i = 0; i < 8; i++, data <<= 1) {
-      Serial.print((data & 0x80) >> 7);
+    for (int offset = 0; offset < 16; offset++) {
+      sprintf(printBuff, " %02x", readEEPROM(addr + offset)); 
+      Serial.print(printBuff);
     }
     Serial.println();
   }
@@ -180,10 +192,9 @@ void dumpFirts256Bytes() {
 
 void writeFirst256Bytes() {
   Serial.println("Writing EEPROM");
-  for (int addr = 0; addr < 256; addr++) {
-    writeEEPROM(addr, addr, true); 
+  for (uint16_t addr = 0; addr < 256; addr++) {
+    writeEEPROM(addr, 255 - addr, true); 
   }
-  
 }
 
 void setup() {
@@ -200,9 +211,9 @@ void setup() {
 
   Serial.begin(115200);
   
+  writeFirst256Bytes();
+  Serial.println("Done writiing.");
   dumpFirts256Bytes();
-  //writeFirst256Bytes();
-
 }
 
 void loop() {
