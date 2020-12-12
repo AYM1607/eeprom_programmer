@@ -27,6 +27,7 @@ void latchOutput() {
   PORTD |= latchMask;
   delayMicroseconds(1);
   PORTD  &= ~latchMask;
+  delayMicroseconds(1);
 }
 
 void commitWrite() {
@@ -88,6 +89,7 @@ void setAddress(int address, bool outputEnable) {
 }
 
 byte readEEPROM(int address) {
+  byte result = 0;
   // TODO: Think about adding a delay if the last operation was a write and where it is appropriate to put it.
   // If the last operation wasn't a read we need to set our pins as input.
   if (lastOp != LAST_OP_READ) {
@@ -97,7 +99,18 @@ byte readEEPROM(int address) {
   // In contrast with the write function, it's okay to set output enable after setting the
   // pins as inputs. This way, the arduino pins are already ready to sink current when the
   // EEPROM starts driving the bus.
-  byte result = (PINB << 3) | (PIND >> 5) ;
+  setAddress(address, true);
+  // For some reason, PINB takes a long time to update, a delay of a minimum of 2 microsends
+  // Must be added. The datasheet of the AT28C256 specifies a time from address to output of 150ns max
+  // and a time from output enabled to output of 70ns max, thus it makes no sense to wait 2000ns, but
+  // if it is not done, the most significant nibble is always 0xF.
+  delayMicroseconds(2);
+  result = (PINB << 3) | (PIND >> 5);
+
+  //for (int pin = EEPROM_D7; pin >= EEPROM_D0; pin--) {
+  //  result <<= 1;
+  //  result += digitalRead(pin);
+  //}
 
   lastOp = LAST_OP_READ;
   return result;
@@ -122,9 +135,14 @@ void writeEEPROM(int address, byte data, bool cooldown) {
   
   // EEPROM_D0 to D2 correspond to PD5 to PD7
   // EEPROM_D3 to D7 correspond to PB0 to PB4
-  PORTD &= (data << 5) & 0b00011111;
-  PORTB &= (data >> 3) & 0b11100000;
+  PORTD = (PORTD & 0b00011111 ) | (data << 5);
+  PORTB = (PORTB & 0b11100000) | (data >> 3) ;
 
+  // Slow version.
+  //for (int pin = EEPROM_D0; pin < EEPROM_D7; pin++, data >>= 1) {
+  //  digitalWrite(pin, data & 1);
+  //}
+  
   commitWrite();
   lastOp = LAST_OP_WRITE;
   
@@ -133,6 +151,40 @@ void writeEEPROM(int address, byte data, bool cooldown) {
   }
 }
 
+
+void disableSoftwareProtection() {
+
+  writeEEPROM(0x5555, 0xAA, false);
+  writeEEPROM(0x2AAA, 0x55, false);
+  writeEEPROM(0x5555, 0x80, false);
+  writeEEPROM(0x5555, 0xAA, false);
+  writeEEPROM(0x2AAA, 0x55, false);
+  writeEEPROM(0x5555, 0x20, false);
+
+  delay(10);
+}
+
+void dumpFirts256Bytes() {
+  byte data;
+  Serial.println("Reading EEPROM");
+  for (int addr = 0; addr < 256; addr++) {
+    data = readEEPROM(addr);
+    sprintf(printBuff, "Address: %x data: 0b", addr);
+    Serial.print(printBuff);
+    for (int i = 0; i < 8; i++, data <<= 1) {
+      Serial.print((data & 0x80) >> 7);
+    }
+    Serial.println();
+  }
+}
+
+void writeFirst256Bytes() {
+  Serial.println("Writing EEPROM");
+  for (int addr = 0; addr < 256; addr++) {
+    writeEEPROM(addr, addr, true); 
+  }
+  
+}
 
 void setup() {
   // put your setup code here, to run once:
@@ -148,8 +200,9 @@ void setup() {
 
   Serial.begin(115200);
   
-  writeEEPROM(0x1234, 0x55, true);
-  writeEEPROM(0x4321, 0x7E, true);
+  dumpFirts256Bytes();
+  //writeFirst256Bytes();
+
 }
 
 void loop() {

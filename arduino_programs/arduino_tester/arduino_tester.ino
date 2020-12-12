@@ -10,6 +10,21 @@
 #define ADDRESS_CLOCK 18
 #define WRITE_CLOCK 19
 
+/*
+
+   PORT mappings for data pins:
+
+    2   PORTE 4
+    3   PORTE 5
+    4   PORTG 5
+    5   PORTE 3
+    6   PORTH 3
+    7   PORTH 4
+    8   PORTH 5
+    9   PORTH 6
+
+*/
+
 void setup() {
   Serial.begin(115200);
   attachInterrupt(digitalPinToInterrupt(ADDRESS_CLOCK), onAddressClock, RISING);
@@ -27,10 +42,16 @@ void onAddressClock() {
 }
 
 void onWriteClock() {
-  Serial.print("Data: 0b"); 
-  for (int pin = DATA_7; pin >= DATA_0; pin--) {
-    Serial.print(digitalRead(pin));
-  }
+  Serial.print("Data: 0b");
+  // TODO: Find a way of making this more readable.
+  Serial.print((PINH & 0x40) >> 6);
+  Serial.print((PINH & 0x20) >> 5);
+  Serial.print((PINH & 0x10) >> 4);
+  Serial.print((PINH & 0x08) >> 3);
+  Serial.print((PINE & 0x08) >> 3);
+  Serial.print((PING & 0x20) >> 5);
+  Serial.print((PINE & 0x20) >> 5);
+  Serial.print((PINE & 0x10) >> 4);
   Serial.println();
 }
 
