@@ -23,6 +23,60 @@ bool isFirstWrite = true;
 
 static char printBuff[128];
 
+void program();
+void dump(); 
+
+void dumpFirts256Bytes() {
+  byte data;
+  Serial.println("Reading EEPROM");
+  for (int addr = 0; addr < 256; addr += 16) {
+    sprintf(printBuff, "%04x:", addr);
+    Serial.print(printBuff);
+    for (int offset = 0; offset < 16; offset++) {
+      sprintf(printBuff, " %02x", readEEPROM(addr + offset)); 
+      Serial.print(printBuff);
+    }
+    Serial.println();
+  }
+}
+
+void setup() {
+  // put your setup code here, to run once:
+  pinMode(SHIFT_DATA, OUTPUT);
+  pinMode(SHIFT_CLK, OUTPUT);
+  pinMode(SHIFT_LATCH, OUTPUT);
+
+  digitalWrite(EEPROM_WE, HIGH);
+  pinMode(EEPROM_WE, OUTPUT);
+  
+  // Setting an invalid value.
+  lastOp = -1;
+
+  Serial.begin(115200);
+}
+
+void loop() {
+  static byte command;
+  // The loop function only process commands.
+  while (Serial.available() == 0);
+
+  command = Serial.read();
+
+  switch(command) {
+    case 0x00:
+    // Program the eeprom.
+      program();      
+    break;
+    case 0x01:
+    // Dump the eeprom.
+      dump();
+    break;
+    default:
+    // Ignore invalid commands.
+    break;
+  }
+}
+
 void latchOutput() {
   static byte latchMask = 0b00010000;
 
@@ -119,12 +173,6 @@ byte readEEPROM(int address) {
   return readBus(address);
 }
 
-
-/**
- * Writes a single byte of data to the specified address.
- * If cooldown is true, the function adds a delay to avoid
- * reading incorrect data after a write.
- */
 void writeEEPROM(int address, byte data, bool pollOnPageChange) {
   // Since we're performing page writes, we must poll the data when we change page.
   if (
@@ -176,47 +224,36 @@ void disableSoftwareProtection() {
   delay(10);
 }
 
-void dumpFirts256Bytes() {
-  byte data;
-  Serial.println("Reading EEPROM");
-  for (int addr = 0; addr < 256; addr += 16) {
-    sprintf(printBuff, "%04x:", addr);
-    Serial.print(printBuff);
-    for (int offset = 0; offset < 16; offset++) {
-      sprintf(printBuff, " %02x", readEEPROM(addr + offset)); 
-      Serial.print(printBuff);
-    }
-    Serial.println();
+void program() {
+  // For now, the programmer will always write to the whole eeprom.
+  byte value;
+  // The program will write byte by byte.
+  for (long addr = 0; addr < 32768; addr++) {
+    // Wait for next value.
+    while(Serial.available() == 0);
+    value = Serial.read();
+    writeEEPROM(addr, value, true);
+    // Send ack.
+    Serial.write(value);
   }
 }
 
-void writeFirst256Bytes() {
-  Serial.println("Writing EEPROM");
-  for (uint16_t addr = 0; addr < 256; addr++) {
-    writeEEPROM(addr, 255 - addr, true); 
+void dump() {
+  long startAddress = 0;
+  long byteCount = 0;
+  byte value;
+  // Wait and read the starting address to dump.
+  while (Serial.available() < 2);
+  startAddress |= Serial.read();
+  startAddress |= Serial.read() << 8;
+
+  // Wait and read the byte count.
+  while (Serial.available() < 2);
+  byteCount |= Serial.read();
+  byteCount |= Serial.read() << 8;
+
+  for (int address = startAddress; address < startAddress + byteCount; address++ ) {
+    value = readEEPROM(address);
+    Serial.write(value);
   }
-}
-
-void setup() {
-  // put your setup code here, to run once:
-  pinMode(SHIFT_DATA, OUTPUT);
-  pinMode(SHIFT_CLK, OUTPUT);
-  pinMode(SHIFT_LATCH, OUTPUT);
-
-  digitalWrite(EEPROM_WE, HIGH);
-  pinMode(EEPROM_WE, OUTPUT);
-  
-  // Setting an invalid value.
-  lastOp = -1;
-
-  Serial.begin(115200);
-  
-  writeFirst256Bytes();
-  Serial.println("Done writiing.");
-  dumpFirts256Bytes();
-}
-
-void loop() {
-  // put your main code here, to run repeatedly:
-
 }
