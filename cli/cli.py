@@ -1,6 +1,7 @@
 import argparse
 import time
 import serial
+from tqdm import tqdm
 
 
 def get_parsed_args():
@@ -82,17 +83,19 @@ def program(args):
         # Sending command
         ser.write((0).to_bytes(1, "big"))
 
-        bytesToWrite = args.file.read()
+        bytes_to_write = args.file.read()
         # Forward the bytes from the selected file
-        for i in range(32 * 1024):
-            # Show progress.
-            if i % 1024 == 0:
-                print(".", end="")
-            value = (bytesToWrite[i]).to_bytes(1, "big")
+        for i in tqdm(range(32 * 1024)):
+            value = (bytes_to_write[i]).to_bytes(1, "big")
             ser.write(value)
-            if value != ser.read():
-                # There was an error with the ack, finish early.
-                break
+            # This delay was found by experimentation.
+            # A byte write in the arduino takes about 80us.
+            # Every 64 bytes (a page) we do data polling and could
+            # take much longer. A byte send given a 115200 baud rate
+            # should take ~70us, a 100us delay should give the EEPROM enough time
+            # to internally write the page withouh the UART read buffer (64 bytes)
+            # overflowing.
+            time.sleep(100.0 * 1e-6)
         print("Done programming!")
 
 
