@@ -245,8 +245,6 @@ void program() {
     while(Serial.available() == 0);
     value = Serial.read();
     writeEEPROM(addr, value, true);
-    // Send ack.
-    Serial.write(value);
   }
 }
 
