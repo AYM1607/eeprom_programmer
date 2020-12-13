@@ -166,3 +166,6 @@ tags
 
 # Binary files
 *.bin
+
+# Mac
+/**/.DS_Store
