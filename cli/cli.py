@@ -10,6 +10,7 @@ def get_parsed_args():
 
     program_parser = subparsers.add_parser("program")
     dump_parser = subparsers.add_parser("dump")
+    erase_parser = subparsers.add_parser("erase")
 
     # Parser for the "program" subcommand.
     program_parser.add_argument(
@@ -58,6 +59,15 @@ def get_parsed_args():
         help="Print the dump to the screen after storing it to the file",
         action="store_true",
     )
+
+    # Parser for the erase command .
+    erase_parser.add_argument(
+        "-p",
+        "--port",
+        help="Serial port where the programmer is located",
+        required=True,
+    )
+
     return parser.parse_args()
 
 
@@ -92,9 +102,7 @@ def dump(args):
         address = int(args.start)
         byte_count = int(args.byte_count)
 
-        # Give a chance to the arduino to reset.
-        # TODO: Arduino resets by default when opening a serial
-        # connection, there's ways to avoid this. Investigate more.
+        # TODO: Avoid arduino autoreset.
         print("Waiting for the arduino to reset...")
         time.sleep(2)
 
@@ -115,6 +123,23 @@ def dump(args):
         print("Done dumping!")
 
 
+def erase(args):
+    print("Erasing...")
+    with serial.Serial(args.port, 115200) as ser:
+
+        # TODO: Avoid arduino autoreset.
+        print("Waiting for the arduino to reset...")
+        time.sleep(2)
+
+        ser.write((2).to_bytes(1, "big"))
+
+        # Wait for the ack.
+        if ser.read() == b"\xFF":
+            print("Erasing completed!")
+        else:
+            print("Erasing failed")
+
+
 def main():
     args = get_parsed_args()
 
@@ -122,6 +147,8 @@ def main():
         program(args)
     elif args.operation == "dump":
         dump(args)
+    elif args.operation == "erase":
+        erase(args)
     else:
         print("Unrecognized command, exiting now...")
 
