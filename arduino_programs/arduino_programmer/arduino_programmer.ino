@@ -25,6 +25,7 @@ static char printBuff[128];
 
 void program();
 void dump(); 
+void erase();
 
 void dumpFirts256Bytes() {
   byte data;
@@ -71,6 +72,9 @@ void loop() {
     // Dump the eeprom.
       dump();
     break;
+    case 0x02:
+    // Erase the EEPROM (fill with 0xFF).
+      erase();
     default:
     // Ignore invalid commands.
     break;
@@ -224,6 +228,14 @@ void disableSoftwareProtection() {
   delay(10);
 }
 
+void erase() {
+  for (long addr = 0; addr < 32768; addr++) {
+    writeEEPROM(addr, 0xFF, true);
+  }
+  // Ack the operation.
+  Serial.write(0xFF);
+}
+
 void program() {
   // For now, the programmer will always write to the whole eeprom.
   byte value;
@@ -239,8 +251,8 @@ void program() {
 }
 
 void dump() {
-  long startAddress = 0;
-  long byteCount = 0;
+  unsigned long startAddress = 0;
+  unsigned long byteCount = 0;
   byte value;
   // Wait and read the starting address to dump.
   while (Serial.available() < 2);
